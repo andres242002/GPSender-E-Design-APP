@@ -59,7 +59,8 @@ class LocationServiceBack : Service() {
     private var reconnectionHandler = Handler(Looper.getMainLooper())
     private var reconnectionRunnable: Runnable? = null
     private var lastSuccessfulOBDRead = 0L
-
+    private var emptyResponseCount = 0
+    private val MAX_EMPTY_RESPONSES = 5 // Allow up to 5 consecutive empty reads
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(locationResult: LocationResult) {
@@ -290,20 +291,27 @@ class LocationServiceBack : Service() {
             sendCommand("01 0C")
             val response: String = readResponse()
 
-            if (response.contains("41 0C")) {  // verify valid response
+            if (response.contains("41 0C")) {
+                // Valid response received
+                emptyResponseCount = 0 // Reset counter
                 val data = response.split(" ".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
                 if (data.size >= 4) {
                     val a = data[2].toInt(16)
                     val b = data[3].toInt(16)
                     rpm = ((a * 256) + b) / 4
-                    // Actualizar timestamp de la última lectura exitosa
                     lastSuccessfulOBDRead = System.currentTimeMillis()
                 }
             } else if (response.isEmpty()) {
-                // Si no hay respuesta, probablemente perdimos la conexión
-                handleOBDDisconnection("No response from OBD device")
-                return 0
+                emptyResponseCount++
+
+                if (emptyResponseCount >= MAX_EMPTY_RESPONSES) {
+                    // Too many consecutive empty responses, assume disconnected
+                    handleOBDDisconnection("No response from OBD device (after multiple attempts)")
+                    emptyResponseCount = 0 // Reset counter to avoid repeated calls
+                    return 0
+                }
             }
+
         } catch (e: Exception) {
             Log.e("OBD", "Error reading RPM: ${e.message}")
             // Si hay una excepción, probablemente perdimos la conexión
