@@ -23,8 +23,8 @@
 
     <ImageView
         android:id="@+id/worldImg"
-        android:layout_width="341dp"
-        android:layout_height="326dp"
+        android:layout_width="307dp"
+        android:layout_height="290dp"
         android:layout_marginTop="40dp"
         android:contentDescription="World Image"
         android:src="@drawable/world"
@@ -34,10 +34,10 @@
 
     <Spinner
         android:id="@+id/idSpinner"
-        android:layout_width="96dp"
-        android:layout_height="34dp"
-        android:layout_marginStart="156dp"
-        android:layout_marginTop="56dp"
+        android:layout_width="141dp"
+        android:layout_height="36dp"
+        android:layout_marginStart="132dp"
+        android:layout_marginTop="32dp"
         android:textAlignment="center"
         android:textColor="#023269"
         android:textSize="20dp"
@@ -48,13 +48,13 @@
         android:id="@+id/textView"
         android:layout_width="96dp"
         android:layout_height="34dp"
-        android:layout_marginTop="40dp"
+        android:layout_marginTop="36dp"
         android:text="SEND"
         android:textAlignment="center"
         android:textColor="#023269"
         android:textSize="25dp"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.495"
+        app:layout_constraintHorizontal_bias="0.498"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/idSpinner" />
 
@@ -62,7 +62,7 @@
         android:id="@+id/sendToggle"
         android:layout_width="174dp"
         android:layout_height="55dp"
-        android:layout_marginTop="192dp"
+        android:layout_marginTop="140dp"
         android:backgroundTint="#023269"
         android:textColor="#93fab4"
         android:textOff="Detenido"
@@ -102,6 +102,6 @@
         app:layout_constraintHorizontal_bias="0.498"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/sendToggle"
-        app:layout_constraintVertical_bias="0.555" />
+        app:layout_constraintVertical_bias="0.813" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

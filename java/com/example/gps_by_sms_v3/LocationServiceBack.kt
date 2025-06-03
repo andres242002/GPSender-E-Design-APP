@@ -7,8 +7,10 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.location.Location
 import android.os.IBinder
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.android.gms.location.*
@@ -219,6 +221,17 @@ class LocationServiceBack : Service() {
         }.start()
     }
 
+    // Check if we have the required Bluetooth permissions
+    private fun hasBluetoothPermissions(): Boolean {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            // For Android 12+, we need BLUETOOTH_CONNECT permission
+            ActivityCompat.checkSelfPermission(this, android.Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+        } else {
+            // For older versions, check BLUETOOTH permission
+            ActivityCompat.checkSelfPermission(this, android.Manifest.permission.BLUETOOTH) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
     // OBD2 Connection methods
     private fun connectToOBD() {
         try {
@@ -228,9 +241,16 @@ class LocationServiceBack : Service() {
                 return
             }
 
+            // Check for Bluetooth permissions before proceeding
+            if (!hasBluetoothPermissions()) {
+                Log.e("OBD", "Bluetooth permissions not granted")
+                sendObdStatusBroadcast(false, "Bluetooth permissions required")
+                return
+            }
+
             sendObdStatusBroadcast(false, "Attempting to connect...")
 
-            // Get paired devices
+            // Get paired devices - this requires BLUETOOTH_CONNECT permission on Android 12+
             val pairedDevices = bluetoothAdapter!!.bondedDevices
             var obd2Device: BluetoothDevice? = null
 
@@ -271,6 +291,10 @@ class LocationServiceBack : Service() {
             // Detener intentos de reconexión si estaban en curso
             stopReconnectionAttempts()
 
+        } catch (e: SecurityException) {
+            Log.e("OBD", "Security exception - missing Bluetooth permissions: ${e.message}")
+            sendObdStatusBroadcast(false, "Bluetooth permissions required")
+            closeOBDConnection()
         } catch (e: Exception) {
             Log.e("OBD", "Error connecting to OBD: ${e.message}")
             sendObdStatusBroadcast(false, "Error: ${e.message}")
