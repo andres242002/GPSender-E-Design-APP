@@ -10,7 +10,6 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Color
-import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.widget.ArrayAdapter
@@ -28,48 +27,29 @@ class MainActivity : AppCompatActivity() {
     private lateinit var sendToggle: ToggleButton
     private lateinit var rpmValueText: TextView
     private lateinit var obdStatusText: TextView
-    private lateinit var idSpinner: Spinner
-
-    companion object {
-        private const val PERMISSION_REQUEST_CODE = 1
-    }
+    private  lateinit var  idSpinner: Spinner
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val permissions = arrayOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.ACCESS_BACKGROUND_LOCATION,
+            Manifest.permission.FOREGROUND_SERVICE,
+            Manifest.permission.FOREGROUND_SERVICE_LOCATION,  // Añadir esto
+            Manifest.permission.BLUETOOTH,
+            Manifest.permission.BLUETOOTH_ADMIN,
+            Manifest.permission.BLUETOOTH_CONNECT
+        )
 
-        // Create notification channels first
-        createNotificationChannels()
-
-        setContentView(R.layout.main_activity)
-
-        // Initialize UI components
-        initializeViews()
-
-        // Setup spinner
-        setupSpinner()
-
-        // Load animated GIF using Glide
-        val imageView: ImageView = findViewById(R.id.worldImg)
-        Glide.with(this).asGif().load(R.drawable.world).into(imageView)
-
-        // Check and request permissions
-        checkAndRequestPermissions()
-
-        // Register broadcast receivers
-        registerReceivers()
-
-        // Setup toggle button listener
-        setupToggleButton()
-    }
-
-    private fun createNotificationChannels() {
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        ActivityCompat.requestPermissions(this, permissions, 1)
 
         val channel = NotificationChannel(
             "location_sender",
             "Location Notifications",
             NotificationManager.IMPORTANCE_HIGH
         )
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
 
         val disconnectionChannel = NotificationChannel(
@@ -78,67 +58,61 @@ class MainActivity : AppCompatActivity() {
             NotificationManager.IMPORTANCE_HIGH
         )
         notificationManager.createNotificationChannel(disconnectionChannel)
-    }
 
-    private fun initializeViews() {
+        setContentView(R.layout.main_activity)
+
+        // Initialize UI components
         sendToggle = findViewById(R.id.sendToggle)
         rpmValueText = findViewById(R.id.rpmValueText)
         obdStatusText = findViewById(R.id.obdStatusText)
         idSpinner = findViewById(R.id.idSpinner)
+        val imageView: ImageView = findViewById(R.id.worldImg)
 
-        // Make RPM TextView visible
-        rpmValueText.visibility = View.VISIBLE
-    }
-
-    private fun setupSpinner() {
         ArrayAdapter.createFromResource(
             this,
             R.array.idSpinner_array,
             android.R.layout.simple_spinner_item
         ).also { adapter ->
+            // Specify the layout to use when the list of choices appears.
             adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            // Apply the adapter to the spinner.
             idSpinner.adapter = adapter
         }
-    }
 
-    private fun setupToggleButton() {
+        // Make RPM TextView visible
+        rpmValueText.visibility = View.VISIBLE
+
+        // Load animated GIF using Glide
+        Glide.with(this).asGif().load(R.drawable.world).into(imageView)
+
+        checkAndRequestPermissions()
+
+        // Register broadcast receivers
+        registerReceivers()
+
+        // Toggle button listener to start/stop sending location
         sendToggle.setOnCheckedChangeListener { _, isChecked ->
+            val selectedOption = idSpinner.selectedItem.toString()
             if (isChecked) {
-                if (hasAllRequiredPermissions()) {
-                    startLocationService()
-                } else {
-                    // Reset toggle and request permissions
-                    sendToggle.isChecked = false
-                    checkAndRequestPermissions()
-                    Toast.makeText(this, "Please grant all required permissions", Toast.LENGTH_LONG).show()
+                Intent(applicationContext, LocationServiceBack::class.java).also {
+                    it.action = LocationServiceBack.Actions.START.toString()
+                    it.putExtra("spinner_value", selectedOption) // <-- Send spinner value here
+                    startService(it)
                 }
+                Toast.makeText(this, "Foreground Service Started", Toast.LENGTH_SHORT).show()
+                updateToggleButtonUI(true)
             } else {
-                stopLocationService()
+                Intent(applicationContext, LocationServiceBack::class.java).also {
+                    it.action = LocationServiceBack.Actions.STOP.toString()
+                    startService(it)
+                }
+                Toast.makeText(this, "Foreground Service Stopped", Toast.LENGTH_SHORT).show()
+                updateToggleButtonUI(false)
+                rpmValueText.text = "RPM: -"
+                obdStatusText.text = "OBD Status: Not Connected"
+                obdStatusText.setTextColor(Color.RED)
             }
         }
-    }
-
-    private fun startLocationService() {
-        val selectedOption = idSpinner.selectedItem.toString()
-        Intent(applicationContext, LocationServiceBack::class.java).also {
-            it.action = LocationServiceBack.Actions.START.toString()
-            it.putExtra("spinner_value", selectedOption)
-            startService(it)
-        }
-        Toast.makeText(this, "Foreground Service Started", Toast.LENGTH_SHORT).show()
-        updateToggleButtonUI(true)
-    }
-
-    private fun stopLocationService() {
-        Intent(applicationContext, LocationServiceBack::class.java).also {
-            it.action = LocationServiceBack.Actions.STOP.toString()
-            startService(it)
-        }
-        Toast.makeText(this, "Foreground Service Stopped", Toast.LENGTH_SHORT).show()
-        updateToggleButtonUI(false)
-        rpmValueText.text = "RPM: -"
-        obdStatusText.text = "OBD Status: Not Connected"
-        obdStatusText.setTextColor(Color.RED)
     }
 
     private fun registerReceivers() {
@@ -183,95 +157,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun getRequiredPermissions(): Array<String> {
-        val permissions = mutableListOf(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION,
-            Manifest.permission.FOREGROUND_SERVICE,
-            Manifest.permission.FOREGROUND_SERVICE_LOCATION
-        )
-
-        // Add Bluetooth permissions based on Android version
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Android 12+ requires new Bluetooth permissions
-            permissions.addAll(listOf(
-                Manifest.permission.BLUETOOTH_CONNECT,
-                Manifest.permission.BLUETOOTH_SCAN
-            ))
-        } else {
-            // Older Android versions use legacy Bluetooth permissions
-            permissions.addAll(listOf(
-                Manifest.permission.BLUETOOTH,
-                Manifest.permission.BLUETOOTH_ADMIN
-            ))
-        }
-
-        // Background location permission for Android 10+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            permissions.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-        }
-
-        return permissions.toTypedArray()
-    }
-
-    private fun hasAllRequiredPermissions(): Boolean {
-        return getRequiredPermissions().all { permission ->
-            ActivityCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
-        }
-    }
-
+    /**
+     * Checks and requests location permissions if not granted
+     */
     private fun checkAndRequestPermissions() {
-        val missingPermissions = getRequiredPermissions().filter { permission ->
-            ActivityCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED
-        }
-
-        if (missingPermissions.isNotEmpty()) {
-            ActivityCompat.requestPermissions(
-                this,
-                missingPermissions.toTypedArray(),
-                PERMISSION_REQUEST_CODE
-            )
-        }
+        if (!hasLocationPermission()) requestLocationPermissions()
     }
 
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
+    private fun hasLocationPermission(): Boolean {
+        return ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun requestLocationPermissions() {
+        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-
-        if (requestCode == PERMISSION_REQUEST_CODE) {
-            val deniedPermissions = mutableListOf<String>()
-
-            for (i in permissions.indices) {
-                if (grantResults[i] != PackageManager.PERMISSION_GRANTED) {
-                    deniedPermissions.add(permissions[i])
-                }
-            }
-
-            if (deniedPermissions.isEmpty()) {
-                Toast.makeText(this, "All permissions granted", Toast.LENGTH_SHORT).show()
-            } else {
-                val deniedNames = deniedPermissions.map { permission ->
-                    when (permission) {
-                        Manifest.permission.ACCESS_FINE_LOCATION -> "Fine Location"
-                        Manifest.permission.ACCESS_COARSE_LOCATION -> "Coarse Location"
-                        Manifest.permission.ACCESS_BACKGROUND_LOCATION -> "Background Location"
-                        Manifest.permission.BLUETOOTH_CONNECT -> "Bluetooth Connect"
-                        Manifest.permission.BLUETOOTH_SCAN -> "Bluetooth Scan"
-                        Manifest.permission.BLUETOOTH -> "Bluetooth"
-                        Manifest.permission.BLUETOOTH_ADMIN -> "Bluetooth Admin"
-                        else -> permission.substringAfterLast(".")
-                    }
-                }
-
-                Toast.makeText(
-                    this,
-                    "Denied permissions: ${deniedNames.joinToString(", ")}. App may not work correctly.",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
+        if (requestCode == 1 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, "Location permissions granted", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "Location permissions denied", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -288,11 +194,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         // Unregister broadcast receivers
-        try {
-            LocalBroadcastManager.getInstance(this).unregisterReceiver(rpmUpdateReceiver)
-            LocalBroadcastManager.getInstance(this).unregisterReceiver(obdStatusReceiver)
-        } catch (e: Exception) {
-            // Receivers may not be registered, ignore
-        }
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(rpmUpdateReceiver)
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(obdStatusReceiver)
     }
 }
